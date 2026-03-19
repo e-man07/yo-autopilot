@@ -21,7 +21,7 @@ export const RISK_PROFILES: Record<RiskLevel, RiskProfile> = {
     color: 'text-emerald-700',
     bgColor: 'bg-emerald-50',
     borderColor: 'border-emerald-200',
-    expectedApy: '~8-15%',
+    expectedApy: '~3-8%',
     volatility: 'Very Low',
     icon: 'shield',
     features: [
@@ -37,7 +37,7 @@ export const RISK_PROFILES: Record<RiskLevel, RiskProfile> = {
     color: 'text-blue-700',
     bgColor: 'bg-blue-50',
     borderColor: 'border-blue-200',
-    expectedApy: '~6-12%',
+    expectedApy: '~2-6%',
     volatility: 'Moderate',
     icon: 'scale',
     features: [
@@ -53,7 +53,7 @@ export const RISK_PROFILES: Record<RiskLevel, RiskProfile> = {
     color: 'text-orange-700',
     bgColor: 'bg-orange-50',
     borderColor: 'border-orange-200',
-    expectedApy: '~6-12%',
+    expectedApy: '~1-5%',
     volatility: 'Higher',
     icon: 'rocket',
     features: [
