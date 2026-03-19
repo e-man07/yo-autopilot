@@ -7,6 +7,8 @@ const inter = Inter({ subsets: ['latin'], variable: '--font-sans' });
 const bigShoulders = Big_Shoulders_Display({ subsets: ['latin'], variable: '--font-display' });
 const jetbrainsMono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-mono' });
 
+export const dynamic = 'force-dynamic';
+
 export const metadata: Metadata = {
   title: 'YO Autopilot — Smart Savings on Autopilot',
   description:
