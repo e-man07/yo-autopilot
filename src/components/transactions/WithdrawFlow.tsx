@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { useRedeem, useShareBalance, usePreviewRedeem } from '@yo-protocol/react';
+import { useRedeem, useUserPosition } from '@yo-protocol/react';
 import { VAULTS as YO_VAULTS } from '@yo-protocol/core';
 import { useAccount } from 'wagmi';
 import { parseUnits, formatUnits } from 'viem';
@@ -27,44 +27,53 @@ export default function WithdrawFlow({ vaultId, onSuccess }: WithdrawFlowProps) 
   const { address } = useAccount();
   const vaultConfig = YO_VAULTS[vaultId];
   const vaultInfo = VAULTS[vaultId];
-  const decimals = 18; // YO vault shares are always 18 decimals
+  const assetDecimals = vaultConfig.underlying.decimals;
 
   const [amount, setAmount] = useState('');
-  const parsedShares = useMemo(() => {
+
+  // Get user's position in asset terms (not shares)
+  const { position } = useUserPosition(vaultId, address);
+  const assetBalance = position?.assets ?? BigInt(0);
+  const shareBalance = position?.shares ?? BigInt(0);
+  const formattedAssetBalance = formatUnits(assetBalance, assetDecimals);
+
+  // Parse user input as asset amount
+  const parsedAssetAmount = useMemo(() => {
     try {
-      return amount ? parseUnits(amount, decimals) : undefined;
+      return amount ? parseUnits(amount, assetDecimals) : undefined;
     } catch {
       return undefined;
     }
-  }, [amount, decimals]);
+  }, [amount, assetDecimals]);
 
-  const { shares: shareBalance } = useShareBalance(vaultId, address);
-  const { assets: previewAssets } = usePreviewRedeem(vaultId, parsedShares, { enabled: !!parsedShares });
+  // Convert asset amount to shares proportionally: shares = (assetAmount / totalAssets) * totalShares
+  const sharesToRedeem = useMemo(() => {
+    if (!parsedAssetAmount || assetBalance === BigInt(0) || shareBalance === BigInt(0)) return undefined;
+    // Cap at max assets
+    const cappedAmount = parsedAssetAmount > assetBalance ? assetBalance : parsedAssetAmount;
+    // shares = cappedAmount * shareBalance / assetBalance
+    return (cappedAmount * shareBalance) / assetBalance;
+  }, [parsedAssetAmount, assetBalance, shareBalance]);
 
   const { redeem, step, isLoading, isSuccess, hash, instant, assetsOrRequestId, reset } = useRedeem({
     vault: vaultId,
     onConfirmed: () => onSuccess?.(),
   });
 
-  const formattedShares = shareBalance ? formatUnits(shareBalance, decimals) : '0';
-  const formattedPreview = previewAssets
-    ? formatUnits(previewAssets, vaultConfig.underlying.decimals)
-    : null;
-
   const stepIndex = step === 'approving' ? 0 : step === 'redeeming' ? 1 : step === 'waiting' ? 2 : -1;
 
   const handleRedeem = async () => {
-    if (!parsedShares) return;
+    if (!sharesToRedeem) return;
     try {
-      await redeem(parsedShares);
+      await redeem(sharesToRedeem);
     } catch (err) {
       console.error('Redeem failed:', err);
     }
   };
 
   const handleMax = () => {
-    if (shareBalance) {
-      setAmount(formatUnits(shareBalance, decimals));
+    if (assetBalance > BigInt(0)) {
+      setAmount(formatUnits(assetBalance, assetDecimals));
     }
   };
 
@@ -117,39 +126,35 @@ export default function WithdrawFlow({ vaultId, onSuccess }: WithdrawFlowProps) 
         <div className="space-y-4">
           <div>
             <div className="mb-1 flex items-center justify-between">
-              <span className="font-mono text-[10px] text-[#666666]">SHARES TO WITHDRAW</span>
+              <span className="font-mono text-[10px] text-[#666666]">AMOUNT TO WITHDRAW</span>
               <button onClick={handleMax} className="font-mono text-[10px] text-[#444444] hover:text-[#A1A1A1]">
-                BAL: {Number(formattedShares).toLocaleString(undefined, { maximumFractionDigits: 6 })}
+                BAL: {Number(formattedAssetBalance).toLocaleString(undefined, { maximumFractionDigits: 6 })} {vaultInfo.assetSymbol}
               </button>
             </div>
-            <Input
-              type="number"
-              placeholder="0.00"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              className="h-12 border-[#2A2A2A] bg-[#090909] font-mono text-lg text-[#EDEDED] placeholder:text-[#444444]"
-              min="0"
-              step="any"
-            />
-          </div>
-
-          {formattedPreview && (
-            <div className="bg-[#090909] p-3 font-mono text-xs text-[#A1A1A1]">
-              You&apos;ll receive approximately{' '}
-              <span className="font-bold text-[#EDEDED]">
-                {Number(formattedPreview).toLocaleString(undefined, { maximumFractionDigits: 6 })} {vaultInfo.assetSymbol}
+            <div className="relative">
+              <Input
+                type="number"
+                placeholder="0.00"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                className="h-12 border-[#2A2A2A] bg-[#090909] pr-20 font-mono text-lg text-[#EDEDED] placeholder:text-[#444444]"
+                min="0"
+                step="any"
+              />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 font-mono text-xs font-bold text-[#666666]">
+                {vaultInfo.assetSymbol}
               </span>
             </div>
-          )}
+          </div>
 
           <Button
             onClick={handleRedeem}
-            disabled={!parsedShares || !address}
+            disabled={!sharesToRedeem || !address}
             variant="outline"
             className="w-full border-[#2A2A2A] bg-transparent font-mono text-sm uppercase text-[#EDEDED] hover:bg-[#222222]"
             size="lg"
           >
-            {!address ? 'CONNECT WALLET' : !parsedShares ? 'ENTER AMOUNT' : 'WITHDRAW'}
+            {!address ? 'CONNECT WALLET' : !parsedAssetAmount ? 'ENTER AMOUNT' : `WITHDRAW ${amount} ${vaultInfo.assetSymbol}`}
           </Button>
         </div>
       )}
